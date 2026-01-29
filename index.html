@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ICU Third Person – FIXED</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+}
+#renderCanvas {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+#hint {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  color: #0f0;
+  font: 14px monospace;
+  z-index: 10;
+}
+</style>
+</head>
+
+<body>
+<div id="hint">Drag = look • Left thumb = move</div>
+<canvas id="renderCanvas"></canvas>
+
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
+<script>
+const canvas = document.getElementById("renderCanvas");
+const engine = new BABYLON.Engine(canvas, true);
+const scene = new BABYLON.Scene(engine);
+scene.clearColor = new BABYLON.Color4(0.04,0.06,0.07,1);
+
+// LIGHT
+new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
+
+// GROUND (physics reference)
+const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 50, height: 50 }, scene);
+ground.isVisible = false;
+
+// FOLLOW CAMERA (OFFICIAL BABYLON 3RD PERSON)
+const camera = new BABYLON.FollowCamera("followCam", new BABYLON.Vector3(0, 2, -6), scene);
+camera.radius = 6;
+camera.heightOffset = 1.6;
+camera.rotationOffset = 180;
+camera.cameraAcceleration = 0.05;
+camera.maxCameraSpeed = 10;
+camera.attachControl(canvas, true);
+
+// LOAD ICU ROOM
+BABYLON.SceneLoader.ImportMesh("", "./glb/", "ICU.glb", scene, (meshes) => {
+  meshes.forEach(m => m.checkCollisions = true);
+});
+
+// PLAYER ROOT
+const player = new BABYLON.TransformNode("player", scene);
+player.position = new BABYLON.Vector3(0, 0, 0);
+
+// LOAD AVATAR
+BABYLON.SceneLoader.ImportMesh("", "./glb/", "avatar.glb", scene, (meshes) => {
+  meshes.forEach(m => {
+    m.parent = player;
+    m.isPickable = false;
+  });
+
+  // HARD NORMALIZE SCALE
+  player.scaling.setAll(0.01);
+
+  // FORCE FEET TO FLOOR
+  const bounds = meshes[0].getHierarchyBoundingVectors();
+  const height = bounds.max.y - bounds.min.y;
+  player.position.y = height / 2;
+
+  // CAMERA TARGET
+  camera.lockedTarget = player;
+});
+
+// MOBILE MOVEMENT (REAL)
+let forward = 0;
+let turn = 0;
+
+scene.onPointerObservable.add((evt) => {
+  if (evt.type === BABYLON.PointerEventTypes.POINTERDOWN) {
+    forward = 1;
+  }
+  if (evt.type === BABYLON.PointerEventTypes.POINTERUP) {
+    forward = 0;
+  }
+});
+
+scene.onBeforeRenderObservable.add(() => {
+  const speed = 0.05;
+  player.rotation.y += turn;
+  const dir = new BABYLON.Vector3(
+    Math.sin(player.rotation.y),
+    0,
+    Math.cos(player.rotation.y)
+  );
+  player.position.addInPlace(dir.scale(forward * speed));
+});
+
+engine.runRenderLoop(() => scene.render());
+window.addEventListener("resize", () => engine.resize());
+</script>
+</body>
+</html>
